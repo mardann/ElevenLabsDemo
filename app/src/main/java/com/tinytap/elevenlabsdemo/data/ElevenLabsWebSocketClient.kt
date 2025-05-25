@@ -1,6 +1,8 @@
 package com.tinytap.elevenlabsdemo.data
 
 import android.util.Log
+import com.tinytap.elevenlabsdemo.data.model.*
+import kotlinx.serialization.PolymorphicSerializer
 import okhttp3.*
 import okio.ByteString
 import java.util.concurrent.TimeUnit
@@ -12,12 +14,13 @@ class ElevenLabsWebSocketClient(
     interface Listener {
         fun onOpen() {}
         fun onUserTranscript(transcript: String) {}
-        fun onAgentResponse(response: String) {}
+        fun onAgentResponse(response: AgentResponseEvent.AgentResponse) {}
         fun onAudio(audioBase64: String, eventId: Int) {}
         fun onInterruption(reason: String) {}
         fun onPing(eventId: Int, pingMs: Long?) {}
         fun onPong(eventId: Int) {}
         fun onContextualUpdate(text: String) {}
+        fun onConversationInitiationMetadata(metadata: ConversationInitiationMetadataEvent.ConversationInitiationMetadata) {}
         fun onClosing(code: Int, reason: String) {}
         fun onClosed(code: Int, reason: String) {}
         fun onFailure(t: Throwable, response: Response?) {}
@@ -27,6 +30,12 @@ class ElevenLabsWebSocketClient(
     private val client = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
+
+    fun <T : BaseEvent> sendEvent(event: T) {
+        val jsonString = WebSocketEventJson.encodeToString(PolymorphicSerializer(BaseEvent::class), event)
+        Log.d("WebSocketClient", "Sending message: $jsonString")
+        webSocket?.send(jsonString)
+    }
 
     fun connect() {
         val url = "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=$agentId"
@@ -61,60 +70,27 @@ class ElevenLabsWebSocketClient(
         })
     }
 
-    fun send(event: String) {
-        Log.d("WebSocketClient", "Sending message: $event")
-        webSocket?.send(event)
-    }
-
     fun disconnect(code: Int = 1000, reason: String = "Client disconnect") {
         Log.d("WebSocketClient", "Disconnecting WebSocket (code=$code, reason=$reason)")
         webSocket?.close(code, reason)
     }
 
-    private fun handleEvent(json: String) {
-        val type = Regex(""""type"\s*:\s*"([^"]+)"""").find(json)?.groupValues?.getOrNull(1)
-        Log.d("WebSocketClient", "Handling event of type: $type")
-        when (type) {
-            "user_transcript" -> {
-                val transcript = Regex("""user_transcript"\s*:\s*"([^"]+)"""").find(json)?.groupValues?.getOrNull(1)
-                Log.d("WebSocketClient", "user_transcript: $transcript")
-                transcript?.let { listener.onUserTranscript(it) }
+    private fun handleEvent(jsonString: String) {
+        try {
+            val event = WebSocketEventJson.decodeFromString(PolymorphicSerializer(BaseEvent::class), jsonString)
+            when (event) {
+                is UserTranscriptEvent -> listener.onUserTranscript(event.userTranscript)
+                is AgentResponseEvent -> listener.onAgentResponse(event.agentResponse)
+                is AudioEvent -> listener.onAudio(event.audioEvent.audioBase64, event.audioEvent.eventId)
+                is InterruptionEvent -> listener.onInterruption(event.interruptionEvent.reason)
+                is PingEvent -> listener.onPing(event.pingEvent.eventId, event.pingEvent.pingMs)
+//                is PongEvent -> listener.onPong(event.pongEvent.eventId)
+                is ContextualUpdateEvent -> listener.onContextualUpdate(event.text)
+                is ConversationInitiationMetadataEvent -> listener.onConversationInitiationMetadata(event.metadata)
+                else -> Log.d("WebSocketClient", "Unknown event type or not handled: ${event.toString()}")
             }
-            "agent_response" -> {
-                val response = Regex("""agent_response"\s*:\s*"([^"]+)"""").find(json)?.groupValues?.getOrNull(1)
-                Log.d("WebSocketClient", "agent_response: $response")
-                response?.let { listener.onAgentResponse(it) }
-            }
-            "audio" -> {
-                val audio = Regex("""audio_base_64"\s*:\s*"([^"]+)"""").find(json)?.groupValues?.getOrNull(1)
-                val eventId = Regex("""event_id"\s*:\s*(\d+)""").find(json)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
-                Log.d("WebSocketClient", "audio event: eventId=$eventId, base64 length=${audio?.length}")
-                if (audio != null) listener.onAudio(audio, eventId)
-            }
-            "interruption" -> {
-                val reason = Regex("""reason"\s*:\s*"([^"]+)"""").find(json)?.groupValues?.getOrNull(1)
-                Log.d("WebSocketClient", "interruption: $reason")
-                reason?.let { listener.onInterruption(it) }
-            }
-            "ping" -> {
-                val eventId = Regex("""event_id"\s*:\s*(\d+)""").find(json)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
-                val pingMs = Regex("""ping_ms"\s*:\s*(\d+)""").find(json)?.groupValues?.getOrNull(1)?.toLongOrNull()
-                Log.d("WebSocketClient", "ping: eventId=$eventId, pingMs=$pingMs")
-                listener.onPing(eventId, pingMs)
-            }
-            "pong" -> {
-                val eventId = Regex("""event_id"\s*:\s*(\d+)""").find(json)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
-                Log.d("WebSocketClient", "pong: eventId=$eventId")
-                listener.onPong(eventId)
-            }
-            "contextual_update" -> {
-                val text = Regex("""text"\s*:\s*"([^"]+)"""").find(json)?.groupValues?.getOrNull(1)
-                Log.d("WebSocketClient", "contextual_update: $text")
-                text?.let { listener.onContextualUpdate(it) }
-            }
-            else -> {
-                Log.d("WebSocketClient", "Unknown event type or not handled: $type")
-            }
+        } catch (e: Exception) {
+            Log.e("WebSocketClient", "Failed to parse event: ${e.message}", e)
         }
     }
 }

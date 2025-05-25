@@ -5,24 +5,31 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tinytap.elevenlabsdemo.audio.AudioPlayer
 import com.tinytap.elevenlabsdemo.data.ElevenLabsWebSocketClient
-import com.tinytap.elevenlabsdemo.data.model.ChatMessage
-import com.tinytap.elevenlabsdemo.data.model.Sender
+import com.tinytap.elevenlabsdemo.data.model.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 
-class ChatViewModel(private val agentId: String) : ViewModel() {
+interface ChatUiModel {
+    val messages: StateFlow<List<ChatMessage>>
+    fun getUserInputAudioFormat(): String
+    fun connect()
+    fun disconnect()
+    fun sendAudioMessage(base64: String)
+}
+
+class ChatViewModel(private val agentId: String) : ViewModel(), ChatUiModel {
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
-    val messages: StateFlow<List<ChatMessage>> = _messages
+    override val messages: StateFlow<List<ChatMessage>> = _messages
 
     private var webSocketClient: ElevenLabsWebSocketClient? = null
     private var isConnected = false
 
-    fun connect() {
+    // Store the required audio format for user input (default: pcm_16000)
+    private var userInputAudioFormat: String = "pcm_16000"
+    override fun getUserInputAudioFormat(): String = userInputAudioFormat
+
+    override fun connect() {
         if (isConnected) {
             Log.d("ChatViewModel", "Already connected to WebSocket.")
             return
@@ -39,10 +46,10 @@ class ChatViewModel(private val agentId: String) : ViewModel() {
                     _messages.value += ChatMessage(transcript, Sender.USER)
                 }
             }
-            override fun onAgentResponse(response: String) {
+            override fun onAgentResponse(response: AgentResponseEvent.AgentResponse) {
                 Log.d("ChatViewModel", "Received agent response: $response")
                 viewModelScope.launch {
-                    _messages.value += ChatMessage(response, Sender.BOT)
+                    _messages.value += ChatMessage(response.agentResponse, Sender.BOT)
                 }
             }
             override fun onAudio(audioBase64: String, eventId: Int) {
@@ -55,9 +62,8 @@ class ChatViewModel(private val agentId: String) : ViewModel() {
             }
             override fun onPing(eventId: Int, pingMs: Long?) {
                 Log.d("ChatViewModel", "Received ping (eventId=$eventId, pingMs=$pingMs), sending pong.")
-                val pong = PongEvent(event_id = eventId)
-                val json = Json.encodeToString(pong)
-                webSocketClient?.send(json)
+                val pong = PongEvent(eventId = eventId)
+                webSocketClient?.sendEvent(pong)
             }
             override fun onPong(eventId: Int) {
                 Log.d("ChatViewModel", "Received pong (eventId=$eventId)")
@@ -78,20 +84,24 @@ class ChatViewModel(private val agentId: String) : ViewModel() {
                 isConnected = false
                 Log.e("ChatViewModel", "WebSocket failure: ${t.message}", t)
             }
+            override fun onConversationInitiationMetadata(metadata: ConversationInitiationMetadataEvent.ConversationInitiationMetadata) {
+                Log.d("ChatViewModel", "Received conversation initiation metadata: $metadata")
+                userInputAudioFormat = metadata.userInputAudioFormat
+            }
         })
         webSocketClient?.connect()
     }
 
-    fun sendMessage(text: String) {
-        Log.d("ChatViewModel", "Submitting user message: $text")
-        _messages.value += ChatMessage(text, Sender.USER)
-        val event = UserTranscriptEvent(userTranscript = text)
-        val json = Json.encodeToString(event)
-        Log.d("ChatViewModel", "Sending user_transcript event: $json")
-        webSocketClient?.send(json)
+
+
+    override fun sendAudioMessage(base64: String) {
+        Log.d("ChatViewModel", "Sending audio message, base64 length: ${base64.length}")
+        AudioPlayer.playBase64Audio(base64)
+        val event = UserAudioChunkEvent(userAudioChunk = base64)
+        webSocketClient?.sendEvent(event)
     }
 
-    fun disconnect() {
+    override fun disconnect() {
         Log.d("ChatViewModel", "Disconnecting WebSocket.")
         webSocketClient?.disconnect()
         isConnected = false
@@ -103,15 +113,9 @@ class ChatViewModel(private val agentId: String) : ViewModel() {
     }
 }
 
-@Serializable
-data class UserTranscriptEvent(
-    val type: String = "user_transcript",
-    @SerialName("user_transcript")
-    val userTranscript: String
-)
 
-@Serializable
-data class PongEvent(
-    val type: String = "pong",
-    val event_id: Int
-) 
+
+
+
+
+
