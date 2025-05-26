@@ -21,4 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Eleven Labs Demo"
 include(":app")
+include(":elevenlabs-sdk")
  
