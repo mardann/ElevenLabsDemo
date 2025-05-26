@@ -3,12 +3,14 @@ package com.tinytap.elevenlabsdemo.data
 import android.util.Log
 import com.tinytap.elevenlabsdemo.data.model.*
 import kotlinx.serialization.PolymorphicSerializer
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import okhttp3.*
 import okio.ByteString
 import java.util.concurrent.TimeUnit
 
 class ElevenLabsWebSocketClient(
-    private val agentId: String,
+    private val websocketUrl: String,
     private val listener: Listener
 ) {
     interface Listener {
@@ -33,15 +35,27 @@ class ElevenLabsWebSocketClient(
 
     fun <T : BaseEvent> sendEvent(event: T) {
         val jsonString = WebSocketEventJson.encodeToString(PolymorphicSerializer(BaseEvent::class), event)
-        Log.d("WebSocketClient", "Sending message: $jsonString")
+
+        jsonString.chunked(4000).forEachIndexed {index, part ->
+            Log.d("WebSocketClient", "Sending message ($index): $part")
+        }
+
         webSocket?.send(jsonString)
     }
 
+    fun sendAudioChunk(base64Chunk: String){
+        val audioChunk = WebSocketEventJson.encodeToString(UserAudioChunkEvent(userAudioChunk = base64Chunk))
+        audioChunk.chunked(5000).forEachIndexed {index, part ->
+            Log.d("WebSocketClient", "Sending AudioChunk ($index): $part")
+        }
+
+        webSocket?.send(audioChunk)
+    }
+
     fun connect() {
-        val url = "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=$agentId"
-        Log.d("WebSocketClient", "Connecting to $url")
+        Log.d("WebSocketClient", "Connecting to $websocketUrl")
         val request = Request.Builder()
-            .url(url)
+            .url(websocketUrl)
             .build()
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -84,10 +98,10 @@ class ElevenLabsWebSocketClient(
                 is AudioEvent -> listener.onAudio(event.audioEvent.audioBase64, event.audioEvent.eventId)
                 is InterruptionEvent -> listener.onInterruption(event.interruptionEvent.reason)
                 is PingEvent -> listener.onPing(event.pingEvent.eventId, event.pingEvent.pingMs)
-//                is PongEvent -> listener.onPong(event.pongEvent.eventId)
+                is PongEvent -> listener.onPong(event.eventId)
                 is ContextualUpdateEvent -> listener.onContextualUpdate(event.text)
                 is ConversationInitiationMetadataEvent -> listener.onConversationInitiationMetadata(event.metadata)
-                else -> Log.d("WebSocketClient", "Unknown event type or not handled: ${event.toString()}")
+                else -> Log.d("WebSocketClient", "Unknown event type or not handled: ${event}")
             }
         } catch (e: Exception) {
             Log.e("WebSocketClient", "Failed to parse event: ${e.message}", e)

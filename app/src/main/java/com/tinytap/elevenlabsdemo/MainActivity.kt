@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import com.tinytap.elevenlabsdemo.data.AGENT_ID_EDDIE
-import com.tinytap.elevenlabsdemo.data.AGENT_ID_ROGER
 import com.tinytap.elevenlabsdemo.ui.theme.ElevenLabsDemoTheme
 import com.tinytap.elevenlabsdemo.ui.ChatScreen
 import com.tinytap.elevenlabsdemo.ui.ChatViewModel

@@ -12,7 +12,7 @@ object AudioPlayer {
 
     fun playBase64Audio(base64: String) {
         try {
-            val audioBytes = Base64.decode(base64, Base64.DEFAULT)
+            val audioBytes = Base64.decode(base64, Base64.NO_WRAP)
             // PCM 16bit, mono, 24kHz is a common TTS output, but you may need to adjust
             val sampleRate = 16000
             val channelConfig = AudioFormat.CHANNEL_OUT_MONO

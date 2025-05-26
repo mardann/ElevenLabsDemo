@@ -148,17 +148,21 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
                             onPress = {
                                 Log.d("ChatScreen", "record onPress")
                                 isRecording = true
-                                VoiceRecorder.startRecording(viewModel.getUserInputAudioFormat())
+                                VoiceRecorder.startRecording(viewModel.getUserInputAudioFormat()){
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        viewModel.sendAudioMessage(it)
+                                    }
+                                }
                                 tryAwaitRelease()
                                 Log.d("ChatScreen", "record onPress - released")
                                 isRecording = false
-//                                VoiceRecorder.stopRecording()
-                                val base64 = VoiceRecorder.getBase64Audio()
-                                if (!base64.isNullOrBlank()) {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        viewModel.sendAudioMessage(base64)
-                                    }
-                                }
+                                VoiceRecorder.stopRecording()
+//                                val base64 = VoiceRecorder.getBase64Audio()
+//                                if (!base64.isNullOrBlank()) {
+//                                    coroutineScope.launch(Dispatchers.IO) {
+//                                        viewModel.sendAudioMessage(base64)
+//                                    }
+//                                }
                             }
                         )
                     }

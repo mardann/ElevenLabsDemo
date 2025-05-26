@@ -24,11 +24,13 @@ object VoiceRecorder {
     private var audioEncoding = AudioFormat.ENCODING_PCM_16BIT
     private var channelConfig = AudioFormat.CHANNEL_IN_MONO
 
+    private val maxOutPutSize = 7000
+
     private var recordingJob: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @SuppressLint("MissingPermission")
-    fun startRecording(format: String = "pcm_16000") {
+    fun startRecording(format: String = "pcm_16000", sendAudioChunk: (String) -> Unit) {
         Log.d(TAG, "startRecording: ")
         stopRecording()
         when (format) {
@@ -59,17 +61,30 @@ object VoiceRecorder {
         recordingJob = scope.launch{
             val buffer = ByteArray(minBufferSize)
             while (isRecording) {
-                val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+
+                val read: Int = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                 if (read > 0) {
+
+
                     Log.d(TAG, "startRecording: write chunk size - $read")
+
                     recordedData?.write(buffer, 0, read)
+
+                    if(recordedData?.size()!! > maxOutPutSize){
+                        val toByteArray = recordedData?.toByteArray()
+                        val base64 = Base64.encodeToString(toByteArray, Base64.NO_WRAP)
+                        Log.d(TAG, "startRecording: send chunk size - ${toByteArray?.size}")
+                        sendAudioChunk(base64)
+                        recordedData?.reset()
+                    }
+
                 }
             }
         }
-        Log.d(TAG, "Started recording with format: $format")
+
     }
 
-    private fun stopRecording() {
+    fun stopRecording() {
         recordingJob?.cancel()
         isRecording = false
         try {
@@ -83,26 +98,30 @@ object VoiceRecorder {
         Log.d("VoiceRecorder", "Stopped recording")
     }
 
-    suspend fun getBase64Audio(): String? {
-        recordingJob?.cancel()
-        isRecording = false
-        try {
-            audioRecord?.stop()
-            audioRecord?.release()
-        } catch (e: Exception) {
-            Log.w("VoiceRecorder", "getBase64Audio: Error stopping AudioRecord: ${e.message}", e)
-        }
-
-
-        val pcmBytes = recordedData?.toByteArray() ?: return null
-        val base64 = withContext(Dispatchers.Default) {
-            Base64.encodeToString(pcmBytes, Base64.NO_WRAP)
-        }
-        recordedData?.reset()
-        recordedData = null
-        Log.d("VoiceRecorder", "Returning base64 audio, bytes: ${pcmBytes.size}")
-        return base64
-    }
+//    suspend fun getBase64Audio(): String? {
+//        recordingJob?.cancel()
+//        isRecording = false
+//        try {
+//            audioRecord?.stop()
+//            audioRecord?.release()
+//        } catch (e: Exception) {
+//            Log.w("VoiceRecorder", "getBase64Audio: Error stopping AudioRecord: ${e.message}", e)
+//        }
+//
+//
+//
+//        val pcmBytes = recordedData?.toByteArray() ?: return null
+//        val base64 = withContext(Dispatchers.Default) {
+//
+//
+//
+//            Base64.encodeToString(pcmBytes, Base64.NO_WRAP)
+//        }
+//        recordedData?.reset()
+//        recordedData = null
+//        Log.d("VoiceRecorder", "Returning base64 audio, bytes: ${pcmBytes.size}")
+//        return base64
+//    }
 
 
 } 

@@ -110,12 +110,72 @@ data class ConversationInitiationMetadataEvent(
     )
 }
 
+@SerialName("conversation_initiation_client_data")
+@Serializable
+data class ConversationInitiationClientData(
+    @SerialName("conversation_config_override")
+    val conversationConfigOverride: ConversationConfigOverride? = null,
+    @SerialName("custom_llm_extra_body")
+    val customLlmExtraBody: CustomLlmExtraBody? = null,
+    @SerialName("dynamic_variables")
+    val dynamicVariables: DynamicVariables? = null,
+
+    ) : BaseEvent(){
+    @Serializable
+    data class ConversationConfigOverride(
+        @SerialName("agent")
+        val agent: Agent? = null,
+        @SerialName("tts")
+        val tts: Tts? = null
+    ) {
+        @Serializable
+        data class Agent(
+            @SerialName("first_message")
+            val firstMessage: String? = null,
+            @SerialName("language")
+            val language: String? = null,
+            @SerialName("prompt")
+            val prompt: Prompt? = null
+        ) {
+            @Serializable
+            data class Prompt(
+                @SerialName("prompt")
+                val prompt: String? = null
+            )
+        }
+
+        @Serializable
+        data class Tts(
+            @SerialName("voice_id")
+            val voiceId: String? = null
+        )
+    }
+
+    @Serializable
+    data class CustomLlmExtraBody(
+        @SerialName("max_tokens")
+        val maxTokens: Int? = null,
+        @SerialName("temperature")
+        val temperature: Double? = null
+    )
+
+    @Serializable
+    data class DynamicVariables(
+        @SerialName("account_type")
+        val accountType: String? = null,
+        @SerialName("user_name")
+        val userName: String? = null
+    )
+}
+
+
+
 
 @Serializable
-@SerialName("")
+
 data class UserAudioChunkEvent(
     @SerialName("user_audio_chunk") val userAudioChunk: String,
-) :BaseEvent()
+)
 
 
 val WebSocketEventSerialModule = SerializersModule {
@@ -127,8 +187,9 @@ val WebSocketEventSerialModule = SerializersModule {
         subclass(PingEvent::class)
         subclass(PongEvent::class)
         subclass(ContextualUpdateEvent::class)
-        subclass(UserAudioChunkEvent::class)
+//        subclass(UserAudioChunkEvent::class)
         subclass(ConversationInitiationMetadataEvent::class)
+        subclass(ConversationInitiationClientData::class)
     }
 }
 
