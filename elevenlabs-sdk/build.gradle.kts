@@ -24,9 +24,6 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
-    buildFeatures {
-        compose = true
-    }
 }
 
 //kotlin {
@@ -35,6 +32,7 @@ android {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.16.0")
+
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
