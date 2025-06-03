@@ -139,7 +139,7 @@ class ChatViewModel : ViewModel, ChatUiModel {
 
     override fun sendAudioMessage(base64: String) {
         Log.d("ChatViewModel", "Sending audio message, base64 length: ${base64.length}")
-        AudioPlayer.playBase64Audio(base64)
+//        AudioPlayer.playBase64Audio(base64)
         webSocketClient?.sendAudioChunk(base64)
 
 
