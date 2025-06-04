@@ -63,7 +63,8 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
     var showPermissionDialog by remember { mutableStateOf(false) }
     var sessionActive by remember { mutableStateOf(false) }
     var agentBusy by remember { mutableStateOf(false) } // TODO: Set this based on agent state
-    var isRecording by remember { mutableStateOf(false) }
+//    var isRecording by remember { mutableStateOf(false) }
+    val isMuted  by viewModel.isMuted.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     // Permission launcher
@@ -142,27 +143,19 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
             val micEnabled = sessionActive && !agentBusy
             Box(contentAlignment = Alignment.Center,
                 modifier = Modifier.pointerInput(micEnabled) {
-                    Log.d("ChatScreen", "record pointerInput: micEnabled=$micEnabled, isRecording=$isRecording")
+                    Log.d("ChatScreen", "record pointerInput: micEnabled=$micEnabled, isMuted=$isMuted")
                     if (micEnabled) {
                         detectTapGestures(
                             onPress = {
                                 Log.d("ChatScreen", "record onPress")
-                                isRecording = true
-                                VoiceRecorder.startRecording(viewModel.getUserInputAudioFormat()){
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        viewModel.sendAudioMessage(it)
-                                    }
-                                }
+
+                                viewModel.isMuted.value = false
+//
                                 tryAwaitRelease()
                                 Log.d("ChatScreen", "record onPress - released")
-                                isRecording = false
-                                VoiceRecorder.stopRecording()
-//                                val base64 = VoiceRecorder.getBase64Audio()
-//                                if (!base64.isNullOrBlank()) {
-//                                    coroutineScope.launch(Dispatchers.IO) {
-//                                        viewModel.sendAudioMessage(base64)
-//                                    }
-//                                }
+
+                                viewModel.isMuted.value = true
+//
                             }
                         )
                     }
@@ -174,7 +167,7 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
                         .background(shape = CircleShape,
                            color =  when {
                                !micEnabled -> Color.Gray
-                               isRecording -> Color.Blue
+                               !isMuted -> Color.Blue
                                else -> Color(0xFF9976D2)
                            }
                         )
@@ -182,8 +175,8 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
 
                 ) {
                     Icon(
-                        painter = if (isRecording) painterResource(R.drawable.baseline_mic_off_24) else painterResource(R.drawable.baseline_mic_24),
-                        contentDescription = if (isRecording) "Recording..." else "Record"
+                        painter = if (isMuted) painterResource(R.drawable.baseline_mic_off_24) else painterResource(R.drawable.baseline_mic_24),
+                        contentDescription = if (!isMuted) "Recording..." else "Record"
                     )
                 }
             }
@@ -227,6 +220,8 @@ fun ChatScreenPreview() {
         override fun connect() {}
         override fun disconnect() {}
         override fun sendAudioMessage(base64: String) {}
+        override val isMuted: MutableStateFlow<Boolean>
+            get() = TODO("Not yet implemented")
     }
     ChatScreen(viewModel = fakeViewModel, modifier = Modifier.fillMaxSize())
 }

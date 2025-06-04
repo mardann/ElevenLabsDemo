@@ -12,8 +12,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.atomic.AtomicBoolean
 
 object VoiceRecorder {
     val TAG = this::class.java.simpleName
@@ -28,6 +30,8 @@ object VoiceRecorder {
 
     private var recordingJob: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    var isMuted = AtomicBoolean(true)
 
     @SuppressLint("MissingPermission")
     fun startRecording(format: String = "pcm_16000", sendAudioChunk: (String) -> Unit) {
@@ -55,9 +59,11 @@ object VoiceRecorder {
             audioEncoding,
             minBufferSize
         )
+
         recordedData = ByteArrayOutputStream()
         isRecording = true
         audioRecord?.startRecording()
+
         recordingJob = scope.launch{
             val buffer = ByteArray(minBufferSize)
             while (isRecording) {
@@ -68,7 +74,14 @@ object VoiceRecorder {
 
                     Log.d(TAG, "startRecording: write chunk size - $read")
 
-                    recordedData?.write(buffer, 0, read)
+                    if(isMuted.get()){
+                        Log.d(TAG, "startRecording: muted")
+                        recordedData?.write(ByteArray(read), 0, read )
+                    }else{
+                        recordedData?.write(buffer, 0, read)
+                    }
+
+
 
                     if(recordedData?.size()!! > maxOutPutSize){
                         val toByteArray = recordedData?.toByteArray()

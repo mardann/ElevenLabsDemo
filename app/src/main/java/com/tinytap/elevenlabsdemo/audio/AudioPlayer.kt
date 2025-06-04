@@ -38,6 +38,7 @@ object AudioPlayer {
                 .build()
             audioTrack?.play()
             audioTrack?.write(audioBytes, 0, audioBytes.size)
+
             Log.d("AudioPlayer", "Playing audio, bytes: ${audioBytes.size}")
         } catch (e: Exception) {
             Log.e("AudioPlayer", "Failed to play audio: ${e.message}", e)

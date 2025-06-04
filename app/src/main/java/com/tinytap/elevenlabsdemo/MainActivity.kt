@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             ElevenLabsDemoTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { pv: PaddingValues ->
-                    val viewModel = ChatViewModel(agentId = AGENT_ID_EDDIE)
+                    val viewModel = ChatViewModel()
                     ChatScreen(viewModel = viewModel, Modifier.padding(pv))
                 }
             }

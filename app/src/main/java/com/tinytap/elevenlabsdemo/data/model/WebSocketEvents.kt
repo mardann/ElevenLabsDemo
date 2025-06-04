@@ -19,8 +19,12 @@ sealed class BaseEvent (
 @Serializable
 @SerialName("user_transcript")
 data class UserTranscriptEvent(
-    @SerialName("user_transcript") val userTranscript: String
+    @SerialName("user_transcription_event") val userTranscript: UserTranscript
 ) : BaseEvent() {
+    @Serializable
+    data class UserTranscript(
+        @SerialName("user_transcript") val userTranscript: String)
+
 //    override val type: String = "user_transcript"
 }
 

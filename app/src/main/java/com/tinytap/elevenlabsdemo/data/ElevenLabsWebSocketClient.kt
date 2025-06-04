@@ -93,7 +93,7 @@ class ElevenLabsWebSocketClient(
         try {
             val event = WebSocketEventJson.decodeFromString(PolymorphicSerializer(BaseEvent::class), jsonString)
             when (event) {
-                is UserTranscriptEvent -> listener.onUserTranscript(event.userTranscript)
+                is UserTranscriptEvent -> listener.onUserTranscript(event.userTranscript.userTranscript)
                 is AgentResponseEvent -> listener.onAgentResponse(event.agentResponse)
                 is AudioEvent -> listener.onAudio(event.audioEvent.audioBase64, event.audioEvent.eventId)
                 is InterruptionEvent -> listener.onInterruption(event.interruptionEvent.reason)

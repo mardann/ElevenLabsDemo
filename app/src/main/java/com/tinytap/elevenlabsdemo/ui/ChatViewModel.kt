@@ -1,17 +1,20 @@
 package com.tinytap.elevenlabsdemo.ui
 
+import android.media.AudioRecord
 import android.provider.SyncStateContract
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.tinytap.elevenlabsdemo.audio.AudioPlayer
+import com.tinytap.elevenlabsdemo.audio.VoiceRecorder
 import com.tinytap.elevenlabsdemo.data.AGENT_ID_EDDIE
 import com.tinytap.elevenlabsdemo.data.API_KEY
 import com.tinytap.elevenlabsdemo.data.ElevenLabsWebSocketClient
 import com.tinytap.elevenlabsdemo.data.model.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -29,13 +32,12 @@ interface ChatUiModel {
     fun connect()
     fun disconnect()
     fun sendAudioMessage(base64: String)
+
+    val isMuted : MutableStateFlow<Boolean>
 }
 
-class ChatViewModel : ViewModel, ChatUiModel {
-    constructor(agentId: String) : super() {
-        this.agentId = agentId
-    }
-    private val agentId: String
+class ChatViewModel : ViewModel(), ChatUiModel {
+
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     override val messages: StateFlow<List<ChatMessage>> = _messages
 
@@ -44,12 +46,22 @@ class ChatViewModel : ViewModel, ChatUiModel {
     private var userInputAudioFormat: String = "pcm_16000"
     override fun getUserInputAudioFormat(): String = userInputAudioFormat
 
+    override val isMuted = MutableStateFlow(false).apply {
+        viewModelScope.launch {
+            collectLatest {
+                VoiceRecorder.isMuted.set(it)
+            }
+        }
+    }
+
+
 
     @OptIn(ExperimentalSerializationApi::class)
     private val retrofit by lazy {
+        val json = Json { ignoreUnknownKeys = true }
         Retrofit.Builder()
             .baseUrl("https://api.elevenlabs.io/")
-            .addConverterFactory(Json { ignoreUnknownKeys = true }.asConverterFactory("application/json".toMediaType()))
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
     }
     private val api by lazy { retrofit.create(ElevenLabsApi::class.java) }
@@ -128,6 +140,7 @@ class ChatViewModel : ViewModel, ChatUiModel {
                     override fun onConversationInitiationMetadata(metadata: ConversationInitiationMetadataEvent.ConversationInitiationMetadata) {
                         Log.d("ChatViewModel", "Received conversation initiation metadata: $metadata")
                         userInputAudioFormat = metadata.userInputAudioFormat
+                        startRecording()
                     }
                 })
                 webSocketClient?.connect()
@@ -136,10 +149,24 @@ class ChatViewModel : ViewModel, ChatUiModel {
             }
         }
     }
+    
+    private fun startRecording(){
+        viewModelScope.launch {
+            isMuted.value = true
+        }
+
+        VoiceRecorder.startRecording(getUserInputAudioFormat()) { audioChunk: String ->
+            sendAudioMessage(audioChunk)
+        }
+    }
+
+    private fun stopRecording(){
+        VoiceRecorder.stopRecording()
+    }
+
 
     override fun sendAudioMessage(base64: String) {
         Log.d("ChatViewModel", "Sending audio message, base64 length: ${base64.length}")
-//        AudioPlayer.playBase64Audio(base64)
         webSocketClient?.sendAudioChunk(base64)
 
 
@@ -147,7 +174,9 @@ class ChatViewModel : ViewModel, ChatUiModel {
 
     override fun disconnect() {
         Log.d("ChatViewModel", "Disconnecting WebSocket.")
+        stopRecording()
         webSocketClient?.disconnect()
+        clearChat()
         isConnected = false
     }
 
