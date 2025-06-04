@@ -34,6 +34,7 @@ interface ChatUiModel {
     fun sendAudioMessage(base64: String)
 
     val isMuted : MutableStateFlow<Boolean>
+    val agentTalking: MutableStateFlow<Boolean>
 }
 
 class ChatViewModel : ViewModel(), ChatUiModel {
@@ -54,7 +55,7 @@ class ChatViewModel : ViewModel(), ChatUiModel {
         }
     }
 
-
+    override val agentTalking = MutableStateFlow(false)
 
     @OptIn(ExperimentalSerializationApi::class)
     private val retrofit by lazy {
@@ -84,12 +85,6 @@ class ChatViewModel : ViewModel(), ChatUiModel {
                     override fun onOpen() {
                         webSocketClient?.sendEvent(ConversationInitiationClientData(
                             conversationConfigOverride = ConversationInitiationClientData.ConversationConfigOverride(
-//                                agent = ConversationInitiationClientData.ConversationConfigOverride.Agent(
-//                                    language = "en-US",
-//                                    prompt = ConversationInitiationClientData.ConversationConfigOverride.Agent.Prompt(
-//                                        prompt = "You are a helpful tutor named Eddy, talking to a young child. you're goal is to help them learn in a fun and friendly manner.",
-//                                    ), firstMessage = "Hey there, I'm Eddy from TinyTap, What is your name?\n"
-//                                )
                             )
                         ))
                         isConnected = true
@@ -109,7 +104,11 @@ class ChatViewModel : ViewModel(), ChatUiModel {
                     }
                     override fun onAudio(audioBase64: String, eventId: Int) {
                         Log.d("ChatViewModel", "Received audio event (eventId=$eventId), base64 length: ${audioBase64.length}")
-                        AudioPlayer.playBase64Audio(audioBase64)
+                        agentTalking.value = true
+                        AudioPlayer.playBase64Audio(audioBase64, viewModelScope){
+                            Log.d("ChatViewModel", "Audio playback completed.")
+                            agentTalking.value = false
+                        }
                     }
                     override fun onInterruption(reason: String) {
                         Log.d("ChatViewModel", "Received interruption: $reason")
@@ -139,6 +138,7 @@ class ChatViewModel : ViewModel(), ChatUiModel {
                     }
                     override fun onConversationInitiationMetadata(metadata: ConversationInitiationMetadataEvent.ConversationInitiationMetadata) {
                         Log.d("ChatViewModel", "Received conversation initiation metadata: $metadata")
+                        clearChat()
                         userInputAudioFormat = metadata.userInputAudioFormat
                         startRecording()
                     }
@@ -176,7 +176,6 @@ class ChatViewModel : ViewModel(), ChatUiModel {
         Log.d("ChatViewModel", "Disconnecting WebSocket.")
         stopRecording()
         webSocketClient?.disconnect()
-        clearChat()
         isConnected = false
     }
 

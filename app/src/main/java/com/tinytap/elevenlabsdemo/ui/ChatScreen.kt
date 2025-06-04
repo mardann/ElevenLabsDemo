@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -65,6 +66,7 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
     var agentBusy by remember { mutableStateOf(false) } // TODO: Set this based on agent state
 //    var isRecording by remember { mutableStateOf(false) }
     val isMuted  by viewModel.isMuted.collectAsState()
+    val agentTalking by viewModel.agentTalking.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     // Permission launcher
@@ -102,6 +104,19 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
     Column(modifier = modifier
         .fillMaxSize()
         .background(Color(0xFFF5F5F5))) {
+        Text(
+            text = when {
+                !isMuted -> "Listening..."
+                agentTalking -> "Agent Talking..."
+                else -> "Idle..."
+            },
+            color = when {
+                !isMuted -> Color.Green
+                agentTalking -> Color.Red
+                else -> Color.DarkGray
+            },
+            modifier = Modifier.padding(16.dp)
+        )
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
@@ -164,12 +179,13 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
                 Box (contentAlignment = Alignment.Center,
                     modifier = Modifier
 
-                        .background(shape = CircleShape,
-                           color =  when {
-                               !micEnabled -> Color.Gray
-                               !isMuted -> Color.Blue
-                               else -> Color(0xFF9976D2)
-                           }
+                        .background(
+                            shape = CircleShape,
+                            color = when {
+                                !micEnabled -> Color.Gray
+                                !isMuted -> Color.Blue
+                                else -> Color(0xFF9976D2)
+                            }
                         )
                         .size(72.dp)
 
@@ -221,6 +237,9 @@ fun ChatScreenPreview() {
         override fun disconnect() {}
         override fun sendAudioMessage(base64: String) {}
         override val isMuted: MutableStateFlow<Boolean>
+            get() = TODO("Not yet implemented")
+
+        override val agentTalking: MutableStateFlow<Boolean>
             get() = TODO("Not yet implemented")
     }
     ChatScreen(viewModel = fakeViewModel, modifier = Modifier.fillMaxSize())
