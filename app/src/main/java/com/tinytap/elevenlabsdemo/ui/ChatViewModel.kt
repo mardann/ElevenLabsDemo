@@ -1,7 +1,5 @@
 package com.tinytap.elevenlabsdemo.ui
 
-import android.media.AudioRecord
-import android.provider.SyncStateContract
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -33,7 +31,7 @@ interface ChatUiModel {
     fun disconnect()
     fun sendAudioMessage(base64: String)
 
-    val isMuted : MutableStateFlow<Boolean>
+    val isUserTalking : MutableStateFlow<Boolean>
     val agentTalking: MutableStateFlow<Boolean>
 }
 
@@ -47,10 +45,14 @@ class ChatViewModel : ViewModel(), ChatUiModel {
     private var userInputAudioFormat: String = "pcm_16000"
     override fun getUserInputAudioFormat(): String = userInputAudioFormat
 
-    override val isMuted = MutableStateFlow(false).apply {
+    override val isUserTalking = MutableStateFlow(false).apply {
         viewModelScope.launch {
-            collectLatest {
-                VoiceRecorder.isMuted.set(it)
+            collectLatest { userTalking ->
+                if(userTalking){
+                    AudioPlayer.release()
+                    agentTalking.value = false
+                }
+                VoiceRecorder.isMuted.set(!userTalking)
             }
         }
     }
@@ -104,10 +106,12 @@ class ChatViewModel : ViewModel(), ChatUiModel {
                     }
                     override fun onAudio(audioBase64: String, eventId: Int) {
                         Log.d("ChatViewModel", "Received audio event (eventId=$eventId), base64 length: ${audioBase64.length}")
-                        agentTalking.value = true
-                        AudioPlayer.playBase64Audio(audioBase64, viewModelScope){
-                            Log.d("ChatViewModel", "Audio playback completed.")
-                            agentTalking.value = false
+                        if(!isUserTalking.value) {
+                            agentTalking.value = true
+                            AudioPlayer.playBase64Audio(audioBase64, viewModelScope) {
+                                Log.d("ChatViewModel", "Audio playback completed.")
+                                agentTalking.value = false
+                            }
                         }
                     }
                     override fun onInterruption(reason: String) {
@@ -151,9 +155,6 @@ class ChatViewModel : ViewModel(), ChatUiModel {
     }
     
     private fun startRecording(){
-        viewModelScope.launch {
-            isMuted.value = true
-        }
 
         VoiceRecorder.startRecording(getUserInputAudioFormat()) { audioChunk: String ->
             sendAudioMessage(audioChunk)

@@ -69,6 +69,8 @@ object AudioPlayer {
     }
 
     fun release() {
+        audioTrack?.pause()
+        audioTrack?.flush()
         audioTrack?.release()
         audioTrack = null
     }

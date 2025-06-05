@@ -5,9 +5,7 @@ import android.content.pm.PackageManager
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,14 +45,15 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.tinytap.elevenlabsdemo.R
-import com.tinytap.elevenlabsdemo.audio.VoiceRecorder
 import com.tinytap.elevenlabsdemo.data.model.ChatMessage
 import com.tinytap.elevenlabsdemo.data.model.Sender
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.viewinterop.AndroidView
+import app.rive.runtime.kotlin.RiveAnimationView
+
+const val eddyStateMachine = "StateMachine"
 
 @Composable
 fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
@@ -65,7 +64,7 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
     var sessionActive by remember { mutableStateOf(false) }
     var agentBusy by remember { mutableStateOf(false) } // TODO: Set this based on agent state
 //    var isRecording by remember { mutableStateOf(false) }
-    val isMuted  by viewModel.isMuted.collectAsState()
+    val isUserTaking  by viewModel.isUserTalking.collectAsState()
     val agentTalking by viewModel.agentTalking.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
@@ -104,14 +103,48 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
     Column(modifier = modifier
         .fillMaxSize()
         .background(Color(0xFFF5F5F5))) {
+
+        AndroidView(
+            {
+
+
+                RiveAnimationView(context).also {
+                    it.setRiveResource(R.raw.eddy_animation1805, stateMachineName = eddyStateMachine)
+
+                    it.animations.forEach { animation ->
+                        Log.d("ChatScreen", "rive view animation: ${animation.name}")
+                    }
+                }
+            },
+            update = { view ->
+                if(agentTalking){
+                    view.setBooleanState(eddyStateMachine, "isTalking", agentTalking)
+                    view.setNumberState(eddyStateMachine, "talking", (1..5).random().toFloat())
+
+
+                }
+                if (isUserTaking) {
+                    view.setBooleanState(eddyStateMachine, "listening", true)
+                }
+
+
+                if(!agentTalking || !isUserTaking){
+                    view.setBooleanState(eddyStateMachine, "waiting", false)
+                    view.stop()
+                }
+
+
+
+            }
+        )
         Text(
             text = when {
-                !isMuted -> "Listening..."
+                isUserTaking -> "Listening..."
                 agentTalking -> "Agent Talking..."
                 else -> "Idle..."
             },
             color = when {
-                !isMuted -> Color.Green
+                isUserTaking -> Color.Green
                 agentTalking -> Color.Red
                 else -> Color.DarkGray
             },
@@ -158,18 +191,18 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
             val micEnabled = sessionActive && !agentBusy
             Box(contentAlignment = Alignment.Center,
                 modifier = Modifier.pointerInput(micEnabled) {
-                    Log.d("ChatScreen", "record pointerInput: micEnabled=$micEnabled, isMuted=$isMuted")
+                    Log.d("ChatScreen", "record pointerInput: micEnabled=$micEnabled, isUserTaking=$isUserTaking")
                     if (micEnabled) {
                         detectTapGestures(
                             onPress = {
                                 Log.d("ChatScreen", "record onPress")
 
-                                viewModel.isMuted.value = false
+                                viewModel.isUserTalking.value = true
 //
                                 tryAwaitRelease()
                                 Log.d("ChatScreen", "record onPress - released")
 
-                                viewModel.isMuted.value = true
+                                viewModel.isUserTalking.value = false
 //
                             }
                         )
@@ -183,7 +216,7 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
                             shape = CircleShape,
                             color = when {
                                 !micEnabled -> Color.Gray
-                                !isMuted -> Color.Blue
+                                isUserTaking -> Color.Blue
                                 else -> Color(0xFF9976D2)
                             }
                         )
@@ -191,8 +224,8 @@ fun ChatScreen(viewModel: ChatUiModel, modifier: Modifier) {
 
                 ) {
                     Icon(
-                        painter = if (isMuted) painterResource(R.drawable.baseline_mic_off_24) else painterResource(R.drawable.baseline_mic_24),
-                        contentDescription = if (!isMuted) "Recording..." else "Record"
+                        painter = if (!isUserTaking) painterResource(R.drawable.baseline_mic_off_24) else painterResource(R.drawable.baseline_mic_24),
+                        contentDescription = if (isUserTaking) "Recording..." else "Record"
                     )
                 }
             }
@@ -236,7 +269,7 @@ fun ChatScreenPreview() {
         override fun connect() {}
         override fun disconnect() {}
         override fun sendAudioMessage(base64: String) {}
-        override val isMuted: MutableStateFlow<Boolean>
+        override val isUserTalking: MutableStateFlow<Boolean>
             get() = TODO("Not yet implemented")
 
         override val agentTalking: MutableStateFlow<Boolean>
